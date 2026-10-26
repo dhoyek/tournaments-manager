@@ -1,0 +1,4 @@
+# موقع ثابت — بلا build. كل push إلى main يُنشر تلقائياً على hsarat-kids.netlify.app
+[build]
+  publish = "."
+  command = ""
