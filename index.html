@@ -169,7 +169,7 @@ td.n,th.n{text-align:center}
 <link rel="manifest" href="manifest.json">
 
 <script>
-const APPV='97';
+const APPV='98';
 /* ---------- بطولات متعددة: كل بطولة نظام مستقل تحت مفتاح تخزين خاص ---------- */
 const TREG='hsarat_tournaments_v1';
 let KEY='hsarat_kids_v1', BKEY=KEY+'_bak', AKEY=KEY+'_auto';
@@ -284,7 +284,7 @@ const DEFAULTS=()=>({
     teamSize:4, win:3, draw:1, loss:0, minMatches:3, balance:true, lowRank:false,
     rankMode:'avg', rankN:5, goalPts:0.33, yPen:0.5, rPen:2,
     mode:'individual', nGrp:2, qAdv:2, preRnd:true, seedMode:'bands', semiAdv:true, semiMode:'pots', fnSplit:false, cupCnt:true, h2h:'after', matchMin:8, thirdPlace:true, plabel:'الأولاد', teamReg:false, fxDirect:true, redMin:2, reentry:true,
-    sport:'football', swUnit:'player', swFlow:'rounds', swTarget:6, swAuto:true, swQual:4, swTie:'h2h', allowSwitch:false, swRepair:true, swRepairMin:0, fxNames:true, cGames:null, cTeamSize:2, vSets:3, vPts:21, vPtsF:15, vRotReset:true, vTO:1, vTOsec:30, vCardPt:true, vPtsMap:null, tVar:'mix', tFirst:'a', tPts:3, tPtsKO:5, tPtsF:7, tMars:true,
+    sport:'football', swUnit:'player', swFlow:'rounds', swTarget:6, swAuto:true, swQual:4, swTie:'h2h', allowSwitch:false, swRepair:true, swRepairMin:0, fxNames:true, cGames:null, cTeamSize:2, vSets:3, vPts:21, vPtsF:15, vRotReset:true, vTO:1, vTOsec:30, vCardPt:true, vPtsMap:null, tVar:'mix', tFirst:'a', tPts:3, tPtsKO:5, tPtsF:7, tMars:true, tTime:false,
     paper:58, feed:3, cutMark:true, lastBackup:null, pin:'', delPin:''},
   kids:[], rounds:[], teams:[], fixtures:[], archive:[], kseq:0, rseq:0, tseq:0, fseq:0, cGame:null, gfx:{}
 });
@@ -1457,7 +1457,7 @@ function teamMatches(t){
   const st=teamStand(f=>f.stage==='L').find(r=>r.t.id===t.id)||{P:0,W:0,L:0,D:0,Pts:0,GF:0,GA:0};
   const res=f=>{ if(f.ga==null) return f.st?'⏱ تُلعب الآن':(f.rdy?'🆕 تنتظر البدء':'بلا نتيجة');
     const w=fxWinner(f), me=f.a===t.id; const my=me?f.ga:f.gb, op=me?f.gb:f.ga;
-    return (w===t.id?'<b style="color:var(--green)">✅ فاز</b>':w?'<b style="color:var(--red)">❌ خسر</b>':'تعادل')+` <b style="direction:ltr;unicode-bidi:isolate">${my}-${op}</b>`; };
+    return (w===t.id?'<b style="color:var(--green)">✅ فاز</b>':w?'<b style="color:var(--red)">❌ خسر</b>':'تعادل')+` <b style="direction:ltr;unicode-bidi:isolate">${my}-${op}</b>${f.tt?' ⏱':''}`; };
   sheet(`<h2>📋 مباريات ${esc(t.name)}${isCards()?' — 🃏 '+esc(cGame().name):''}</h2>
     <div class="okbox">${t.kids.map(id=>esc(kid(id).name)).join(' و ')||'بلا لاعبين'}<br>
       لعب <b>${st.P}</b>${isSwissCont()?'/'+swTarget():''} · فاز <b>${st.W}</b> · خسر <b>${st.L}</b>${st.D?' · تعادل <b>'+st.D+'</b>':''} · النقاط <b>${st.Pts}</b> · فارق ${st.GF-st.GA>0?'+':''}${st.GF-st.GA}</div>
@@ -3378,7 +3378,7 @@ function fxHTML(f){
     ${rdy?`<div class="rdybar">🆕 جاهزة — بانتظار الفريقين <span class="mini" style="color:#14532D">(منذ ${Math.max(0,Math.round((Date.now()-new Date(f.ts))/60000))} د)</span><button class="btn main sm" data-fst="${f.id}" style="width:auto;padding:6px 12px">▶ بدأت</button></div>`:''}
     ${run?`<div class="rdybar" style="background:#FFF7E0;color:#6B5210;border-color:#F1DFA8">⏱ تُلعب الآن — منذ ${Math.max(0,Math.round((Date.now()-new Date(f.st))/60000))} د</div>`:''}
     <div class="mh"><span>${tag} · مباراة ${f.no}${f.rm?' · <b style="color:var(--red)">إعادة لقاء</b>':''}${f.solo?' · <b style="color:#6B5210">تكميلية لـ'+esc(team(f.solo).name)+'</b>':''}</span>
-      <span style="display:flex;align-items:center;gap:6px"><span>${saved?`<b style="direction:ltr;unicode-bidi:isolate;font-size:15px">${fxScoreTxt(f)}</b>${ko&&tie?(f.pens?' · 🥅 '+esc((f.pens==='A'?A:B).name):' · <b style="color:var(--red)">بحاجة ترجيح</b>'):''}`:'بانتظار النتيجة'}</span>
+      <span style="display:flex;align-items:center;gap:6px"><span>${saved?`<b style="direction:ltr;unicode-bidi:isolate;font-size:15px">${fxScoreTxt(f)}</b>${f.tt?' ⏱':''}${ko&&tie?(f.pens?' · 🥅 '+esc((f.pens==='A'?A:B).name):' · <b style="color:var(--red)">بحاجة ترجيح</b>'):''}`:'بانتظار النتيجة'}</span>
       ${isCards()?'':`<button class="iconbtn" data-fiche="${f.id}" title="${isTawle()?'التسجيل لعبة بلعبة':'فيش المباراة والساعة'}" style="width:30px;height:30px">${isTawle()?'🎲':'📋'}</button>`}</span></div>
     <div class="teams">${T(A,'',wn===f.a)}<div class="vs">ضد</div>${T(B,'b',wn===f.b)}</div>
     ${isTawle()?(()=>{ /* 🎲 قائمة واحدة بكل النتائج النهائية الممكنة (إلى N، والمارس قد يجعلها N+1) */
@@ -3386,12 +3386,21 @@ function fxHTML(f){
       const opts=[];
       tFinals(N).forEach(([w,l])=>{ const v=w+'-'+l; opts.push(`<option value="${v}" ${cur===v?'selected':''}>${esc(w+'-'+l+' · فاز '+A.name)}</option>`); });
       tFinals(N).forEach(([w,l])=>{ const v=l+'-'+w; opts.push(`<option value="${v}" ${cur===v?'selected':''}>${esc(w+'-'+l+' · فاز '+B.name)}</option>`); });
+      /* ⏱ v98: نتيجة انتهاء الوقت — أي نتيجة بلا تعادل (عند تفعيلها بالإعدادات، أو لمباراة سُجّلت كذلك) */
+      const tt=saved&&f.tt, tOn=S.settings.tTime===true||tt;
+      if(tt){ opts.forEach((o,i)=>{ opts[i]=o.replace(' selected',''); });
+        opts.unshift(`<option value="tt:${f.ga}-${f.gb}" selected>${esc('⏱ '+Math.max(f.ga,f.gb)+'-'+Math.min(f.ga,f.gb)+' · فاز '+(f.ga>f.gb?A:B).name+' (انتهى الوقت)')}</option>`); }
+      if(tOn) opts.push(`<option value="time">⏱ انتهى الوقت — إدخال النتيجة يدوياً…</option>`);
       return `${live?`<div class="mini" style="padding:6px 10px 0;font-weight:700;color:#6B5210">🎲 جارية لعبة بلعبة: <span style="direction:ltr;unicode-bidi:isolate">${esc(A.name)} ${sm.a} – ${sm.b} ${esc(B.name)}</span> · اللعبة ${(f.tg||[]).length+1}: ${TVN[tVarOf((f.tg||[]).length)]}</div>`:''}
       <div class="res" style="grid-template-columns:1fr auto auto;align-items:center">
       <select data-tres style="font-weight:700"><option value="" ${cur?'':'selected'} disabled>— النتيجة النهائية (حتى ${N}) —</option>${opts.join('')}</select>
       <button data-sv class="btn ${saved?'ghost':'main'} sm" style="width:auto;padding:10px 14px">${saved?'تعديل':'حفظ'}</button>
       <button data-fiche="${f.id}" class="btn ghost sm" style="width:auto;padding:10px 10px" title="التسجيل لعبة بلعبة">🎲</button>
-    </div>`; })()
+    </div>
+    ${tOn?`<div data-ttbox class="res" style="display:none;grid-template-columns:1fr auto 1fr;align-items:center;border-top:none;padding-top:0">
+      <input data-tta type="number" min="0" max="30" inputmode="numeric" placeholder="${esc(A.name)}" value="${tt?f.ga:''}" style="text-align:center">
+      <span class="mini">⏱ النقاط عند انتهاء الوقت</span>
+      <input data-ttb type="number" min="0" max="30" inputmode="numeric" placeholder="${esc(B.name)}" value="${tt?f.gb:''}" style="text-align:center"></div>`:''}`; })()
     :isCards()?(()=>{ /* 🃏 قائمة واحدة بكل النتائج الممكنة للأشواط (تُلعب كلها) — لا خطأ إدخال */
       const N=cN(), cur=saved?f.ga+'-'+f.gb:'';
       const opts=[]; for(let w=N;w>=0;w--){ const l=N-w, v=w+'-'+l;
@@ -3419,15 +3428,26 @@ function fxHTML(f){
 function wireFx(){
   document.querySelectorAll('#playWrap .match[data-f]').forEach(box=>{
     const f=S.fixtures.find(x=>x.id===box.dataset.f); if(!f) return;
+    const trs=box.querySelector('[data-tres]'), ttb=box.querySelector('[data-ttbox]');
+    if(trs&&ttb){ const sh=()=>{ ttb.style.display=(trs.value==='time'||trs.value.startsWith('tt:'))?'grid':'none'; };
+      trs.onchange=sh; sh(); }
     const sv=box.querySelector('[data-sv]');
     if(sv) sv.onclick=()=>{
       if(isTawle()){ /* 🎲 النتيجة النهائية من القائمة */
-        const v=box.querySelector('[data-tres]').value;
+        let v=box.querySelector('[data-tres]').value, tt=false;
         if(!v){ alert('اختر النتيجة من القائمة.'); return; }
+        if(v==='time'||v.startsWith('tt:')){ /* ⏱ أي نتيجة بلا تعادل */
+          const ia=box.querySelector('[data-tta]'), ib=box.querySelector('[data-ttb]');
+          const x=ia?ia.value.trim():'', y=ib?ib.value.trim():'';
+          if(v==='time'&&(x===''||y==='')){ alert('أدخل نقاط اللاعبين عند انتهاء الوقت.'); return; }
+          const xa=x===''?Number(v.slice(3).split('-')[0]):Math.max(0,Math.min(30,Number(x)||0)), yb=y===''?Number(v.slice(3).split('-')[1]):Math.max(0,Math.min(30,Number(y)||0));
+          if(xa===yb){ alert('لا تعادل في الطاولة — عند تساوي النقاط تُلعب لعبة حاسمة واحدة، ثم أدخل النتيجة بعدها.'); return; }
+          v=xa+'-'+yb; tt=true; }
         const [a,b]=v.split('-').map(Number), sm=tSums(f);
         if((f.tg||[]).length&&(sm.a!==a||sm.b!==b)){
           if(!confirm('النتيجة المختارة تختلف عن سجلّ الألعاب ('+sm.a+'-'+sm.b+') — اعتمادها يمسح السجلّ. متابعة؟')) return;
           delete f.tg; }
+        if(tt) f.tt=true; else delete f.tt;
         saveFx(f,a,b); return; }
       if(isCards()){ /* 🃏 النتيجة من القائمة: «أشواط الأول-أشواط الثاني» */
         const v=box.querySelector('[data-cres]').value;
@@ -4924,6 +4944,7 @@ function renderSet(){
           <div class="fld"><label>الأدوار الإقصائية حتى</label><input id="s_tptsk" type="number" min="1" max="25" value="${tClamp(st.tPtsKO,5)}"></div>
           <div class="fld"><label>النهائي حتى</label><input id="s_tptsf" type="number" min="1" max="25" value="${tClamp(st.tPtsF,7)}"></div>
         </div>
+        <div class="fld"><label><input type="checkbox" id="s_ttime" ${st.tTime?'checked':''} style="width:auto;margin-left:6px">السماح بنتيجة «⏱ انتهى الوقت» (أي نتيجة بلا تعادل — لبطولة فيها حدّ زمني للمباراة)</label></div>
         <div class="fld"><label><input type="checkbox" id="s_tmars" ${st.tMars!==false?'checked':''} style="width:auto;margin-left:6px">المارس = نقطتان (يُنهي اللاعب كل أحجاره قبل أن يُخرج خصمه أي حجر)</label></div>
         <div class="mini" style="margin:-6px 0 10px">قواعد المحبوسة تختلف بين الضيع — اتفقوا عليها واكتبوها قبل البطولة (مثلاً: حبس آخر حجر للخصم ببيته هل يُعتبر مارس؟). اللوحة فيها زرّ «مارس» يستعمله الحكم متى انطبقت القاعدة.
           الفوز = نقطة بجدول الترتيب (يُغيَّر من «النقاط والترتيب»)، ولا تعادل في الطاولة.</div>
@@ -5155,7 +5176,7 @@ function renderSet(){
       st.tVar=['a','m'].includes($('#s_tvar').value)?$('#s_tvar').value:'mix';
       st.tFirst=$('#s_tfirst').value==='m'?'m':'a';
       st.tPts=tClamp($('#s_tpts').value,3); st.tPtsKO=tClamp($('#s_tptsk').value,5); st.tPtsF=tClamp($('#s_tptsf').value,7);
-      st.tMars=$('#s_tmars').checked;
+      st.tMars=$('#s_tmars').checked; st.tTime=$('#s_ttime').checked;
     }
     if(st.sport==='cards'){
       const list=[...document.querySelectorAll('#cgList [data-cg]')].map(d=>({id:d.dataset.cg,name:d.querySelector('[data-cgn]').value.trim(),n:Math.max(1,Math.min(9,Number(d.querySelector('[data-cgr]').value)||1))})).filter(g=>g.name);

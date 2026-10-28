@@ -5,7 +5,7 @@
    bypassed ({cache:'no-store'}), so a new deploy shows up on the very next open.
    The response is kept as a spare copy, used only when the network is unreachable,
    so the POS still opens during an internet cut. */
-const CACHE = 'hsarat-kids-v97';
+const CACHE = 'hsarat-kids-v98';
 const SHELL = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
