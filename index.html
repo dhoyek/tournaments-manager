@@ -169,7 +169,7 @@ td.n,th.n{text-align:center}
 <link rel="manifest" href="manifest.json">
 
 <script>
-const APPV='100';
+const APPV='101';
 /* ---------- بطولات متعددة: كل بطولة نظام مستقل تحت مفتاح تخزين خاص ---------- */
 const TREG='hsarat_tournaments_v1';
 let KEY='hsarat_kids_v1', BKEY=KEY+'_bak', AKEY=KEY+'_auto';
@@ -1660,6 +1660,33 @@ function swRandomize(){
   save(); renderPlay(); renderHeader(); swToast(swLastNew,[]);
   const waiting=pool.length-pairs.length*2;
   if(waiting>0) okToast('🔀 '+pairs.length+' مباراة بالقرعة'+(waiting?' · ينتظر '+waiting:''));
+}
+/* v101: ✎ تعديل مباراة إقصائية لم تُلعب (دور الـ16 حتى النهائي): تبديل لاعب بآخر من نفس الدور —
+   إن كان الآخر في مباراة ثانية من الدور نفسه يُبادَلان، فيبقى الجدول سليماً */
+function koEditMatch(f){
+  if(!f||f.ga!=null||!isKO(f)) return;
+  const pend=S.fixtures.filter(x=>isKO(x)&&x.stage===f.stage&&x.ga==null);
+  const ids=[]; pend.forEach(x=>[x.a,x.b].forEach(id=>{ if(id&&!ids.includes(id)) ids.push(id); }));
+  const where=id=>{ const g=pend.find(x=>x.a===id||x.b===id); return g?(g===f?'بهذه المباراة':'م'+g.no+(g.st?' (بدأت)':'')):''; };
+  const opt=sel=>ids.map(id=>`<option value="${id}" ${id===sel?'selected':''}>${esc(team(id).name)} — ${where(id)}</option>`).join('');
+  const U=isTawle()?'اللاعب':'الفريق';
+  sheet(`<h2>✎ ${esc(STAGEN[f.stage]||'')} · مباراة ${f.no}</h2>
+    <div class="mini" style="margin-bottom:8px">اختر من يلعب هذه المباراة من ${isTawle()?'لاعبي':'فرق'} ${esc(STAGEN[f.stage]||'الدور')}. إن اخترت ${isTawle()?'لاعباً':'فريقاً'} من مباراة أخرى بالدور نفسه، يأخذ مكانه هناك من خرج من هنا (تبادل).</div>
+    <div class="fld"><label>${U} الأول</label><select id="keA">${opt(f.a)}</select></div>
+    <div class="fld"><label>${U} الثاني</label><select id="keB">${opt(f.b)}</select></div>
+    <button class="btn main" id="keOk">حفظ التعديل</button>
+    <button class="btn ghost" onclick="closeSheet()" style="margin-top:8px">إلغاء</button>`);
+  $('#keOk').onclick=()=>{
+    const na=$('#keA').value, nb=$('#keB').value;
+    if(na===nb){ alert('اختر '+(isTawle()?'لاعبَين مختلفَين':'فريقين مختلفين')+'.'); return; }
+    if(na===f.a&&nb===f.b){ closeSheet(); return; }
+    const out=[f.a,f.b].filter(id=>id!==na&&id!==nb);
+    const pull=newId=>{ if(newId===f.a||newId===f.b) return; const g=pend.find(x=>x!==f&&(x.a===newId||x.b===newId)); if(!g) return;
+      const rep=out.shift(); if(rep==null) return; if(g.a===newId) g.a=rep; else g.b=rep; g.st=null; g.man=true; };
+    pull(na); pull(nb);
+    autoBackup('قبل تعديل مباراة إقصائية',true);
+    f.a=na; f.b=nb; f.st=null; f.man=true; f.pens=null;
+    save(); closeSheet(); renderPlay(); renderHeader(); okToast('✓ عُدّلت المباراة '+f.no); };
 }
 function swManualPair(){
   if(swSel.length!==2) return;
@@ -3319,6 +3346,14 @@ function saveFx(f,ga,gb){
       const g=swFx().find(x=>x!==f&&x.ga==null&&(x.a===prevW||x.b===prevW));
       if(g){ if(g.a===prevW) g.a=newW; else g.b=newW; g.st=null; g.rdy=true; g.man=true; }
       okToast('✓ صُحّحت النتيجة — '+team(newW).name+' يكمل'+(g?' (م'+g.no+')':'')+' و'+team(prevW).name+' خرج'); } }
+  /* v101: تصحيح نتيجة إقصائية بعد إنشاء الدور التالي — الفائز الجديد يحلّ مكان القديم في مباراته التالية،
+     وفي نصف النهائي يتبادلان مكانيهما بين النهائي ومباراة المركز الثالث (إن لم تُلعبا) */
+  if(isKO(f)&&f.ga!=null){ const pw=fxWinner(f), nw=ga>gb?f.a:gb>ga?f.b:(f.pens==='A'?f.a:f.pens==='B'?f.b:null);
+    if(pw&&nw&&pw!==nw){ const pl=pw, nl=nw;   /* pw صار خاسراً، nw صار فائزاً */
+      const later=S.fixtures.filter(x=>x!==f&&isKO(x)&&x.no>f.no&&(x.a===pl||x.b===pl||x.a===nl||x.b===nl));
+      if(later.some(x=>x.ga!=null)){ alert('⛔ مباراة لاحقة لهذين '+(isTawle()?'اللاعبين':'الفريقين')+' سُجّلت نتيجتها — صحّحها أولاً (من الأحدث للأقدم).'); renderPlay(); return; }
+      later.forEach(x=>{ const sw=id=>id===pl?nl:id===nl?pl:id; x.a=sw(x.a); x.b=sw(x.b); x.st=null; });
+      if(later.length) okToast('✓ صُحّحت النتيجة — '+team(nl).name+' يتأهل بدل '+team(pl).name); } }
   f.ga=ga; f.gb=gb; f.pens=null;
   f.ra=team(f.a).kids.slice(); f.rb=team(f.b).kids.slice();
   f.ts=nowISO(); save();
@@ -3499,6 +3534,9 @@ function fxHTML(f){
 function wireFx(){
   document.querySelectorAll('#playWrap .match[data-f]').forEach(box=>{
     const f=S.fixtures.find(x=>x.id===box.dataset.f); if(!f) return;
+    if(isKO(f)&&f.ga==null&&!box.querySelector('[data-koe]')){ const h=box.querySelector('.mh');
+      if(h&&S.fixtures.filter(x=>isKO(x)&&x.stage===f.stage&&x.ga==null).length){ const e=document.createElement('button'); e.className='iconbtn'; e.textContent='✎'; e.dataset.koe='1';
+        e.title='تعديل من يلعب'; e.style.cssText='width:26px;height:26px;margin-right:6px'; e.onclick=ev=>{ ev.stopPropagation(); koEditMatch(f); }; h.appendChild(e); } }
     const trs=box.querySelector('[data-tres]'), ttb=box.querySelector('[data-ttbox]');
     if(trs&&ttb){ const sh=()=>{ ttb.style.display=(trs.value==='time'||trs.value.startsWith('tt:'))?'grid':'none'; };
       trs.onchange=sh; sh(); }
