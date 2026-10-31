@@ -169,7 +169,7 @@ td.n,th.n{text-align:center}
 <link rel="manifest" href="manifest.json">
 
 <script>
-const APPV='99';
+const APPV='100';
 /* ---------- بطولات متعددة: كل بطولة نظام مستقل تحت مفتاح تخزين خاص ---------- */
 const TREG='hsarat_tournaments_v1';
 let KEY='hsarat_kids_v1', BKEY=KEY+'_bak', AKEY=KEY+'_auto';
@@ -1524,7 +1524,9 @@ function swEditMatch(f){
     const g=swFx().find(x=>x.ga==null&&x.id!==f.id&&(x.a===t.id||x.b===t.id));
     if(g) return (g.st?'⛔ يلعب الآن (م'+g.no+')':'↔ ينتظر م'+g.no+' — يُبادَل');
     return (t.hold?'⏸ موقوف · ':'')+(swElimOn()&&swLost(t.id)?'❌ خرج':swPlayed(t.id)+(swElimOn()?' فوز':'/'+swTarget())); };
-  const opt=(sel)=>TS.map(t=>`<option value="${t.id}" ${t.id===sel?'selected':''} ${/⛔/.test(status(t))?'disabled':''}>${esc(t.name)} — ${status(t)}</option>`).join('');
+  /* v100: بالإقصاء المستمر — الخارجون لا يُختارون، والباقون يظهرون أولاً */
+  const TSo=swElimOn()?TS.filter(t=>!swLost(t.id)||t.id===f.a||t.id===f.b):TS;
+  const opt=(sel)=>TSo.map(t=>`<option value="${t.id}" ${t.id===sel?'selected':''} ${/⛔|❌/.test(status(t))&&t.id!==sel?'disabled':''}>${esc(t.name)} — ${status(t)}</option>`).join('');
   sheet(`<h2>✎ تعديل المباراة ${f.no}</h2>
     <div class="mini" style="margin-bottom:8px">بدّل أحد الفريقين (مثلاً فريق غير متاح الآن). إن اخترت فريقاً ينتظر مباراة أخرى لم تبدأ، يُبادَل الفريقان بين المباراتين. الفريق الذي يلعب الآن غير متاح.</div>
     <div class="fld"><label>الفريق الأول</label><select id="seA">${opt(f.a)}</select></div>
@@ -1534,8 +1536,9 @@ function swEditMatch(f){
     <button class="btn ghost" onclick="closeSheet()" style="margin-top:8px">إلغاء</button>`);
   $('#seOk').onclick=()=>{
     const na=$('#seA').value, nb=$('#seB').value;
-    if(na===nb){ alert('اختر فريقين مختلفين.'); return; }
+    if(na===nb){ alert('اختر '+(isTawle()?'لاعبَين مختلفَين':'فريقين مختلفين')+'.'); return; }
     if(na===f.a&&nb===f.b){ closeSheet(); return; }
+    if(swElimOn()&&[na,nb].some(id=>swLost(id))){ alert('❌ لا يمكن إدخال '+(isTawle()?'لاعب':'فريق')+' خرج من البطولة.'); return; }
     if(swFx().some(x=>x.ga!=null&&((x.a===na&&x.b===nb)||(x.a===nb&&x.b===na)))&&!confirm('الفريقان التقيا سابقاً — متابعة رغم ذلك؟')) return;
     const out=[f.a,f.b].filter(id=>id!==na&&id!==nb);
     const pull=(newId)=>{ /* الفريق الجديد إن كان ينتظر مباراة أخرى: يحلّ مكانه فريق خارج من هنا */
@@ -1615,6 +1618,48 @@ function swPairPool(only){
   }
   if(made||swLastCancel.length) save();
   return made;
+}
+/* v100: 🔀 تزاوج عشوائي — يفكّ كل المباريات التي لم تبدأ (بلا نتيجة وبلا «▶ بدأت») ويعيد تزاوج لاعبيها
+   (ومعهم المتفرّغون بالمستمر) بالقرعة، بلا إعادة لقاء قدر الإمكان. المباريات الجارية والمنتهية لا تُمَسّ.
+   المباريات الناتجة معلَّمة «يدوية» فلا تُعيد خانة إعادة التزاوج ترتيبها بحسب النقاط. */
+function swRandomize(){
+  if(S.fixtures.some(isKO)){ alert('الختام الإقصائي أُنشئ — لا تزاوج جديد.'); return; }
+  const cont=isSwissCont();
+  if(cont&&S.swStop){ alert('🛑 «لا مباريات جديدة» مفعّل — أطفئه أولاً.'); return; }
+  const R=swFx().filter(f=>f.ga==null&&!f.st);
+  const keepSwr=cont?null:(R.length?Number(R[0].swr)||swRoundNo():swRoundNo());
+  const ids=new Set(R.map(f=>f.id));
+  const rest=S.fixtures.filter(f=>!ids.has(f.id));
+  /* المرشّحون: لاعبو المباريات المفكوكة + (بالمستمر) المتفرّغون */
+  const cand=new Set(); R.forEach(f=>{ cand.add(f.a); cand.add(f.b); });
+  const saved=S.fixtures; S.fixtures=rest;
+  if(cont) swPool().forEach(t=>cand.add(t.id));
+  let pool=[...cand].filter(id=>gTeams().some(t=>t.id===id)&&!(swElimOn()&&swLost(id)));
+  const cap=swElimOn()?Math.max(0,swAlive().length-swFx().filter(f=>f.ga==null).length-swQualEff()):Infinity;
+  S.fixtures=saved;
+  if(pool.length<2){ alert('لا يوجد '+(isTawle()?'لاعبون':'فرق')+' بانتظار مباراة لم تبدأ — لا شيء يُعاد تزاوجه.'); return; }
+  if(!confirm('🔀 تزاوج عشوائي لـ'+pool.length+' '+(isTawle()?'لاعباً':'فريقاً')+'؟\n'+(R.length?'تُلغى '+R.length+' مباراة لم تبدأ وتُعاد بالقرعة. ':'')+'المباريات الجارية (▶ بدأت) والمنتهية لا تتغيّر، ولا يتقابل من لعبا سابقاً قدر الإمكان.')) return;
+  autoBackup('قبل التزاوج العشوائي',true);
+  S.fixtures=rest;
+  const met={}; swFx().forEach(f=>{ if(f.ga==null&&!f.st) return; (met[f.a]=met[f.a]||new Set()).add(f.b); (met[f.b]=met[f.b]||new Set()).add(f.a); });
+  const isMet=(x,y)=>met[x]&&met[x].has(y);
+  /* أفضل قرعة من عدّة محاولات: الأقل إعادة لقاء */
+  let best=null;
+  for(let t=0;t<60;t++){ const p=shuffle(pool), used=new Set(), pairs=[]; let rm=0;
+    for(let i=0;i<p.length;i++){ if(used.has(p[i])) continue; let j=-1;
+      for(let k=i+1;k<p.length;k++) if(!used.has(p[k])&&!isMet(p[i],p[k])){ j=k; break; }
+      if(j<0) for(let k=i+1;k<p.length;k++) if(!used.has(p[k])){ j=k; break; }
+      if(j<0) continue; used.add(p[i]); used.add(p[j]); if(isMet(p[i],p[j])) rm++; pairs.push([p[i],p[j]]); }
+    if(!best||rm<best.rm){ best={pairs,rm}; if(!rm) break; } }
+  const pairs=best.pairs.slice(0,cap===Infinity?best.pairs.length:cap);
+  swLastNew=[]; swLastCancel=[];
+  pairs.forEach(([a,b])=>{ S.fseq++;
+    S.fixtures.push({id:uid('f'),no:S.fseq,stage:'L',group:null,swr:cont?Math.max(swPlayed(a),swPlayed(b))+1:keepSwr,a,b,ga:null,gb:null,pens:null,cnt:true,rdy:cont||undefined,man:true,rm:isMet(a,b)||undefined,ts:nowISO()});
+    swLastNew.push(S.fixtures[S.fixtures.length-1].id); });
+  S.fixtures.sort((x,y)=>(x.no||0)-(y.no||0));
+  save(); renderPlay(); renderHeader(); swToast(swLastNew,[]);
+  const waiting=pool.length-pairs.length*2;
+  if(waiting>0) okToast('🔀 '+pairs.length+' مباراة بالقرعة'+(waiting?' · ينتظر '+waiting:''));
 }
 function swManualPair(){
   if(swSel.length!==2) return;
@@ -1774,6 +1819,7 @@ function renderPlaySwissCont(){
         <button class="btn gold" id="swPair" ${pool.length>=2&&!S.swStop&&!ko.length?'':'disabled'}>🎲 زاوج المتفرّغين تلقائياً</button>
         <button class="btn ghost" id="swPairM" ${swSel.length===2&&!S.swStop&&!ko.length?'':'disabled'}>✍️ مباراة بين المختارَين${swSel.length?' ('+swSel.length+'/2)':''}</button>
       </div>
+      <button class="btn ghost" id="swRnd" style="margin-top:8px;border-color:var(--gold);color:#6B5210" ${(!S.swStop&&!ko.length&&(pool.length>=2||pend.some(f=>!f.st)))?'':'disabled'}>🔀 تزاوج عشوائي — يعيد قرعة كل المباريات التي لم تبدأ</button>
       <div class="mini" style="margin-top:6px">${st.swAuto!==false?'✅ التزاوج تلقائي بعد كل نتيجة (يُغيَّر من الإعدادات).':'التزاوج يدوي: اكبس «زاوج المتفرّغين» بعد تسجيل النتائج.'} اكبس على فريقين لاختيارهما يدوياً. 🛑 عند وقت الإقفال: لا تُنشأ مباريات جديدة وتُكمَل الجارية فقط.</div>
       ${held.length?`<div class="mini" style="margin-top:6px">⏸ موقوفون مؤقتاً: ${held.map(t=>'<b>'+esc(t.name)+'</b>').join('، ')}</div>`:''}
       ${unav.length?`<div class="mini" style="margin-top:6px;color:var(--red)">لا يُزاوَجون الآن: ${unav.map(t=>'<b>'+esc(t.name)+'</b> ('+esc(teamUnavail(t))+')').join('، ')} — علّم اللاعب حاضراً أو أكمل الفريق من تبويب اللاعبين.</div>`:''}
@@ -1815,6 +1861,7 @@ function renderPlaySwissCont(){
   document.querySelectorAll('#playWrap [data-pw]').forEach(b=>b.onclick=()=>{ const id=b.dataset.pw;
     if(swSel.includes(id)) swSel=swSel.filter(x=>x!==id); else { swSel.push(id); if(swSel.length>2) swSel.shift(); } renderPlay(); });
   $('#swStop').onchange=()=>{ S.swStop=$('#swStop').checked; save(); renderPlay(); };
+  if($('#swRnd')&&!$('#swRnd').disabled) $('#swRnd').onclick=swRandomize;
   if($('#swPair')&&!$('#swPair').disabled) $('#swPair').onclick=()=>{ const n=swPairAndAnnounce(); if(!n) alert('لا تزاوج ممكن الآن (التقوا جميعاً سابقاً أو فريق واحد فقط).'); renderPlay(); renderHeader(); };
   if($('#swPairM')&&!$('#swPairM').disabled) $('#swPairM').onclick=swManualPair;
   if($('#swDoneT')) $('#swDoneT').onclick=()=>{ swShowDone=!swShowDone; renderPlay(); };
@@ -1886,6 +1933,7 @@ function renderPlaySwissTeams(){
         <button class="btn ghost sm" id="fxNm">${st.fxNames!==false?'🙈 إخفاء أسماء اللاعبين':'👁 إظهار أسماء اللاعبين'}</button>
       </div>
       <button class="btn gold" id="swDrawT" ${TS.length>=2&&!ko.length?'':'disabled'}>🎲 تزاوج الجولة ${rno+1}</button>
+      ${(!ko.length&&swFx().some(f=>f.ga==null&&!f.st))?`<button class="btn ghost" id="swRnd" style="margin-top:8px;border-color:var(--gold);color:#6B5210">🔀 قرعة عشوائية للجولة ${rno} — للمباريات التي لم تبدأ</button>`:''}
       ${pend?`<div class="warnbox" style="margin:8px 0 0">لسا في <b>${pend}</b> مباراة بلا نتيجة — سجّلها قبل التزاوج القادم.</div>`:''}
       ${TS.length<2?'<div class="warnbox" style="margin:8px 0 0">يلزم فريقان على الأقل.</div>':''}
       ${ko.length?'<div class="mini" style="margin:8px 0 0">الختام الإقصائي منشأ — لا جولات سويسرية جديدة.</div>':''}
@@ -1902,6 +1950,7 @@ function renderPlaySwissTeams(){
   if($('#prnTS')) $('#prnTS').onclick=printTeamStand;
   if($('#prnKO')) $('#prnKO').onclick=printKO;
   if($('#swDrawT')&&!$('#swDrawT').disabled) $('#swDrawT').onclick=swissDrawTeams;
+  if($('#swRnd')) $('#swRnd').onclick=swRandomize;
   if($('#swRedo')) $('#swRedo').onclick=swUndoRound;
   if($('#reKO')) $('#reKO').onclick=redoKO;
   if($('#mkF')) $('#mkF').onclick=makeFinal;
@@ -3261,6 +3310,15 @@ function makeFinal(){
   save(); renderPlay();
 }
 function saveFx(f,ga,gb){
+  /* v100: تصحيح نتيجة بالإقصاء المستمر — إن انقلب الفائز: الفائز الجديد يأخذ مكان القديم في مباراته التالية (إن لم تُلعب) */
+  const prevW=(f.ga!=null&&f.stage==='L'&&swElimOn())?fxWinner(f):null;
+  if(prevW){ const newW=ga>gb?f.a:gb>ga?f.b:null;
+    if(newW&&newW!==prevW){
+      if(swFx().some(x=>x!==f&&x.no>f.no&&x.ga!=null&&(x.a===prevW||x.b===prevW))){
+        alert('⛔ '+team(prevW).name+' لعب مباريات بعد هذه وسُجّلت نتائجها — صحّح نتائج مبارياته اللاحقة أولاً (من الأحدث للأقدم).'); renderPlay(); return; }
+      const g=swFx().find(x=>x!==f&&x.ga==null&&(x.a===prevW||x.b===prevW));
+      if(g){ if(g.a===prevW) g.a=newW; else g.b=newW; g.st=null; g.rdy=true; g.man=true; }
+      okToast('✓ صُحّحت النتيجة — '+team(newW).name+' يكمل'+(g?' (م'+g.no+')':'')+' و'+team(prevW).name+' خرج'); } }
   f.ga=ga; f.gb=gb; f.pens=null;
   f.ra=team(f.a).kids.slice(); f.rb=team(f.b).kids.slice();
   f.ts=nowISO(); save();
