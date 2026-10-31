@@ -169,7 +169,7 @@ td.n,th.n{text-align:center}
 <link rel="manifest" href="manifest.json">
 
 <script>
-const APPV='98';
+const APPV='99';
 /* ---------- بطولات متعددة: كل بطولة نظام مستقل تحت مفتاح تخزين خاص ---------- */
 const TREG='hsarat_tournaments_v1';
 let KEY='hsarat_kids_v1', BKEY=KEY+'_bak', AKEY=KEY+'_auto';
@@ -284,7 +284,7 @@ const DEFAULTS=()=>({
     teamSize:4, win:3, draw:1, loss:0, minMatches:3, balance:true, lowRank:false,
     rankMode:'avg', rankN:5, goalPts:0.33, yPen:0.5, rPen:2,
     mode:'individual', nGrp:2, qAdv:2, preRnd:true, seedMode:'bands', semiAdv:true, semiMode:'pots', fnSplit:false, cupCnt:true, h2h:'after', matchMin:8, thirdPlace:true, plabel:'الأولاد', teamReg:false, fxDirect:true, redMin:2, reentry:true,
-    sport:'football', swUnit:'player', swFlow:'rounds', swTarget:6, swAuto:true, swQual:4, swTie:'h2h', allowSwitch:false, swRepair:true, swRepairMin:0, fxNames:true, cGames:null, cTeamSize:2, vSets:3, vPts:21, vPtsF:15, vRotReset:true, vTO:1, vTOsec:30, vCardPt:true, vPtsMap:null, tVar:'mix', tFirst:'a', tPts:3, tPtsKO:5, tPtsF:7, tMars:true, tTime:false,
+    sport:'football', swUnit:'player', swFlow:'rounds', swTarget:6, swAuto:true, swQual:4, swTie:'h2h', allowSwitch:false, swRepair:true, swRepairMin:0, swElim:false, fxNames:true, cGames:null, cTeamSize:2, vSets:3, vPts:21, vPtsF:15, vRotReset:true, vTO:1, vTOsec:30, vCardPt:true, vPtsMap:null, tVar:'mix', tFirst:'a', tPts:3, tPtsKO:5, tPtsF:7, tMars:true, tTime:false,
     paper:58, feed:3, cutMark:true, lastBackup:null, pin:'', delPin:''},
   kids:[], rounds:[], teams:[], fixtures:[], archive:[], kseq:0, rseq:0, tseq:0, fseq:0, cGame:null, gfx:{}
 });
@@ -625,7 +625,9 @@ function teamStand(fxPred,tmPred){
   });
   if(isSwissTeam()) (Array.isArray(S.swBye)?S.swBye:[]).forEach(e=>{
     const r=rows[e.t]; if(r){ r.P++; r.W++; r.Pts+=swByePts(); } });
-  return sortStand(Object.values(rows),fxs.filter(f=>!f.solo));
+  const out=sortStand(Object.values(rows),fxs.filter(f=>!f.solo));
+  if(swElimOn()){ const al=out.filter(r=>!swLost(r.t.id)); return al.concat(out.filter(r=>swLost(r.t.id))); }
+  return out;
 }
 /* الفرز المتسلسل: عند كل مستوى، المجموعة المتعادلة تُحسم بالمستوى التالي.
    «المواجهة المباشرة» = جدول مصغّر (نقاط/فارق/مسجَّل) من المباريات بين المتعادلين فقط —
@@ -1374,7 +1376,7 @@ let fxStatC=null;
 function fxStat(tid){ if(!isSwissTeam()) return '';
   if(!fxStatC){ fxStatC={}; teamStand(f=>f.stage==='L').forEach(r=>fxStatC[r.t.id]=r); }
   const r=fxStatC[tid]; if(!r) return '';
-  return `<div class="mini" style="font-weight:700;color:#6B5210;margin-top:2px">لعب ${r.P}${isSwissCont()?'/'+swTarget():''} · ${r.Pts} نقاط</div>`; }
+  return `<div class="mini" style="font-weight:700;color:#6B5210;margin-top:2px">لعب ${r.P}${(isSwissCont()&&!swElimOn())?'/'+swTarget():''} · ${r.Pts} نقاط</div>`; }
 function renderPlay(){
   fxStatC=null; tawleSync();
   if(S.settings.mode==='league'||S.settings.mode==='groups') renderPlayTeams();
@@ -1437,13 +1439,20 @@ function teamUnavail(t){
   const ab=t.kids.filter(id=>!kid(id).present);
   if(ab.length) return '⛔ غائب: '+ab.map(id=>kid(id).name).join('، ');
   return null; }
-function swPool(){ return gTeams().filter(t=>!teamUnavail(t)&&!swBusy(t.id)&&swPlayed(t.id)<swTarget()); }
+/* v99: ❌ الإقصاء المستمر — بالسويسري المستمر: الخاسر يخرج، والمتفرّغون من الباقين يتزاوجون فوراً،
+   حتى يبقى عدد المتأهلين للختام (swQual) فيُنشأ الختام الإقصائي (نصف نهائي/نهائي) */
+const swElimOn=()=>isSwissCont()&&S.settings.swElim===true;
+const swLost=tid=>swFx().some(f=>f.ga!=null&&!f.solo&&(f.a===tid||f.b===tid)&&fxWinner(f)&&fxWinner(f)!==tid);
+const swAlive=()=>gTeams().filter(t=>!swLost(t.id));
+function swPool(){ if(swElimOn()) return gTeams().filter(t=>!teamUnavail(t)&&!swBusy(t.id)&&!swLost(t.id));
+  return gTeams().filter(t=>!teamUnavail(t)&&!swBusy(t.id)&&swPlayed(t.id)<swTarget()); }
 /* حالة الفريق بالمستمر — للعرض */
 function swTeamState(t){
   const g=swFx().find(f=>f.ga==null&&(f.a===t.id||f.b===t.id));
   if(g) return swReady(g)?{c:'#1F8A4C',t:'🆕 ينتظر بدء م'+g.no}:{c:'#6B5210',t:'▶ يلعب م'+g.no};
+  if(swElimOn()&&swLost(t.id)) return {c:'var(--mut)',t:'❌ خرج'};
   const u=teamUnavail(t); if(u) return {c:'var(--red)',t:u};
-  if(swPlayed(t.id)>=swTarget()) return {c:'var(--mut)',t:'✅ أنهى'};
+  if(!swElimOn()&&swPlayed(t.id)>=swTarget()) return {c:'var(--mut)',t:'✅ أنهى'};
   return {c:'#14532D',t:'😴 متفرّغ'}; }
 let swFilt='', swShowTeams=false;
 /* إشعار قصير */
@@ -1460,7 +1469,7 @@ function teamMatches(t){
     return (w===t.id?'<b style="color:var(--green)">✅ فاز</b>':w?'<b style="color:var(--red)">❌ خسر</b>':'تعادل')+` <b style="direction:ltr;unicode-bidi:isolate">${my}-${op}</b>${f.tt?' ⏱':''}`; };
   sheet(`<h2>📋 مباريات ${esc(t.name)}${isCards()?' — 🃏 '+esc(cGame().name):''}</h2>
     <div class="okbox">${t.kids.map(id=>esc(kid(id).name)).join(' و ')||'بلا لاعبين'}<br>
-      لعب <b>${st.P}</b>${isSwissCont()?'/'+swTarget():''} · فاز <b>${st.W}</b> · خسر <b>${st.L}</b>${st.D?' · تعادل <b>'+st.D+'</b>':''} · النقاط <b>${st.Pts}</b> · فارق ${st.GF-st.GA>0?'+':''}${st.GF-st.GA}</div>
+      لعب <b>${st.P}</b>${(isSwissCont()&&!swElimOn())?'/'+swTarget():''} · فاز <b>${st.W}</b> · خسر <b>${st.L}</b>${st.D?' · تعادل <b>'+st.D+'</b>':''} · النقاط <b>${st.Pts}</b> · فارق ${st.GF-st.GA>0?'+':''}${st.GF-st.GA}</div>
     ${fx.length?`<div class="list">${fx.map(f=>{ const o=team(f.a===t.id?f.b:f.a);
       return `<div class="it"><div class="g"><b>${esc(STAGEN[f.stage]||'')} · م${f.no} — ضد ${esc(o.name)}</b>
         <small>${res(f)}${f.ts?' · '+fmtDT(f.ts):''}${f.solo?' · تكميلية':''}${f.rm?' · إعادة لقاء':''}</small></div>
@@ -1514,7 +1523,7 @@ function swEditMatch(f){
   const status=t=>{ if(t.id===f.a||t.id===f.b) return 'بهذه المباراة';
     const g=swFx().find(x=>x.ga==null&&x.id!==f.id&&(x.a===t.id||x.b===t.id));
     if(g) return (g.st?'⛔ يلعب الآن (م'+g.no+')':'↔ ينتظر م'+g.no+' — يُبادَل');
-    return (t.hold?'⏸ موقوف · ':'')+swPlayed(t.id)+'/'+swTarget(); };
+    return (t.hold?'⏸ موقوف · ':'')+(swElimOn()&&swLost(t.id)?'❌ خرج':swPlayed(t.id)+(swElimOn()?' فوز':'/'+swTarget())); };
   const opt=(sel)=>TS.map(t=>`<option value="${t.id}" ${t.id===sel?'selected':''} ${/⛔/.test(status(t))?'disabled':''}>${esc(t.name)} — ${status(t)}</option>`).join('');
   sheet(`<h2>✎ تعديل المباراة ${f.no}</h2>
     <div class="mini" style="margin-bottom:8px">بدّل أحد الفريقين (مثلاً فريق غير متاح الآن). إن اخترت فريقاً ينتظر مباراة أخرى لم تبدأ، يُبادَل الفريقان بين المباراتين. الفريق الذي يلعب الآن غير متاح.</div>
@@ -1571,7 +1580,9 @@ function swPairPool(only){
   pool.sort((a,b)=>swPlayed(a.id)-swPlayed(b.id)||(pts[b.id]||0)-(pts[a.id]||0)||a.no-b.no);
   const met={}; swFx().forEach(f=>{ (met[f.a]=met[f.a]||new Set()).add(f.b); (met[f.b]=met[f.b]||new Set()).add(f.a); });
   const used=new Set(); let made=0;
-  for(let i=0;i<pool.length;i++){ const a=pool[i]; if(used.has(a.id)) continue;
+  /* الإقصاء: كل مباراة تُخرج لاعباً — لا تزاوج يُنزل الباقين تحت عدد المتأهلين للختام */
+  const elim=swElimOn(), cap=elim?Math.max(0,swAlive().length-swFx().filter(f=>f.ga==null).length-swQualEff()):Infinity;
+  for(let i=0;i<pool.length;i++){ if(made>=cap) break; const a=pool[i]; if(used.has(a.id)) continue;
     /* الشريك: الأقرب بعدد المباريات ثم بالنقاط، بلا إعادة لقاء */
     let j=-1, bk=null; for(let k=i+1;k<pool.length;k++){ const b=pool[k]; if(used.has(b.id)) continue; if(met[a.id]&&met[a.id].has(b.id)) continue;
       const key=[Math.abs(swPlayed(a.id)-swPlayed(b.id)),Math.abs((pts[a.id]||0)-(pts[b.id]||0)),k];
@@ -1581,12 +1592,12 @@ function swPairPool(only){
     S.fseq++; S.fixtures.push({id:uid('f'),no:S.fseq,stage:'L',group:null,swr:Math.max(swPlayed(a.id),swPlayed(b.id))+1,a:a.id,b:b.id,ga:null,gb:null,pens:null,cnt:true,rdy:true,ts:nowISO()}); swLastNew.push(S.fixtures[S.fixtures.length-1].id);
     made++; }
   /* آخر المتفرّغين التقوا جميعاً سابقاً ولا مباراة جارية: إعادة لقاء كحلّ أخير كي لا يبقى أحد دون هدفه */
-  if(!made&&pool.length>=2&&!swFx().some(f=>f.ga==null)){
+  if(!elim&&!made&&pool.length>=2&&!swFx().some(f=>f.ga==null)){
     const a=pool[0], b=pool[1];
     S.fseq++; S.fixtures.push({id:uid('f'),no:S.fseq,stage:'L',group:null,swr:Math.max(swPlayed(a.id),swPlayed(b.id))+1,a:a.id,b:b.id,ga:null,gb:null,pens:null,cnt:true,rm:true,rdy:true,ts:nowISO()}); swLastNew.push(S.fixtures[S.fixtures.length-1].id);
     made++; }
   /* فريق واحد متأخر والباقون أنهوا: مباراة تكميلية ضد فريق منتهٍ — تُحتسب للمتأخر فقط (solo) */
-  if(!made&&pool.length===1&&!swFx().some(f=>f.ga==null)){
+  if(!elim&&!made&&pool.length===1&&!swFx().some(f=>f.ga==null)){
     const a=pool[0]; const metA=met[a.id]||new Set();
     const extra={}; swFx().forEach(f=>{ if(f.solo){ const h=f.solo===f.a?f.b:f.a; extra[h]=(extra[h]||0)+1; } });
     const cand=gTeams().filter(t=>t.id!==a.id).sort((x,y)=>(metA.has(x.id)?1:0)-(metA.has(y.id)?1:0)||(extra[x.id]||0)-(extra[y.id]||0)||Math.abs((pts[x.id]||0)-(pts[a.id]||0))-Math.abs((pts[y.id]||0)-(pts[a.id]||0)));
@@ -1647,6 +1658,7 @@ function cutResolve(G,s){
 /* المتأهلون الآن: {o: الترتيب, N, fin:[ids], pg:[ids]|null, ps} */
 function swQualPlan(){
   const o=teamStand(f=>f.stage==='L'), N=swQualEff();
+  if(swElimOn()){ const al=o.filter(r=>!swLost(r.t.id)), n=Math.min(N,al.length); return {o,N:n,fin:al.slice(0,n).map(r=>r.t.id),pg:null,ps:0}; }
   if(o.length<=N) return {o,N:o.length,fin:o.map(r=>r.t.id),pg:null,ps:0};
   if(swTieRule()!=='h2h'||o[N-1].Pts!==o[N].Pts) return {o,N,fin:o.slice(0,N).map(r=>r.t.id),pg:null,ps:0};
   const tp=o[N-1].Pts, above=o.filter(r=>r.Pts>tp), G=o.filter(r=>r.Pts===tp);
@@ -1747,9 +1759,10 @@ function renderPlaySwissCont(){
   const unav=TS.filter(t=>teamUnavail(t)&&!t.hold&&swPlayed(t.id)<T);
   w.innerHTML=`
     ${champ?`<div class="okbox">🏆 <b>${esc(champ.name)}</b> ${isCards()?'بطل لعبة '+esc(cGame().name):'بطل البطولة'}!<br>${champ.kids.map(id=>kNo(id)+esc(kid(id).name)).join(' · ')}</div>`:''}
-    <div class="infobox">النظام: <b>سويسري مستمر — بلا انتظار الجولة</b>${isCards()?' 🃏 · اللعبة: <b>'+esc(cGame().name)+'</b>':''}${isTawle()?' 🎲 · '+esc(tVarTxt())+' · حتى '+tNeed({stage:'L'}):''}. كل فريق يلعب <b>${T}</b> مباريات؛
+    <div class="infobox">النظام: <b>سويسري مستمر — بلا انتظار الجولة</b>${isCards()?' 🃏 · اللعبة: <b>'+esc(cGame().name)+'</b>':''}${isTawle()?' 🎲 · '+esc(tVarTxt())+' · حتى '+tNeed({stage:'L'}):''}.${swElimOn()?` <b>❌ الخاسر يخرج</b> — الفائز يُزاوَج فوراً مع أول متفرّغ من الباقين (الأقل انتصارات أولاً)، حتى يبقى <b>${swQualEff()}</b> للختام.
+      المشاركون: <b>${TS.length}</b> · الباقون: <b>${swAlive().length}</b> · خرجوا: <b>${TS.length-swAlive().length}</b> · منتهية`:` كل فريق يلعب <b>${T}</b> مباريات؛
       من ينهي مباراته يدخل «المتفرّغين» ويُزاوَج فوراً مع الأقرب إليه (أقل مباريات ثم أقرب نقاطاً) بلا إعادة لقاء.
-      الفرق: <b>${TS.length}</b> · بلغوا الهدف: <b>${reached}</b>/${TS.length} · منتهية: <b>${done.length}</b> · جارية: <b>${pend.length}</b>.
+      الفرق: <b>${TS.length}</b> · بلغوا الهدف: <b>${reached}</b>/${TS.length} · منتهية`}: <b>${done.length}</b> · جارية: <b>${pend.length}</b>.
       <br><span class="mini">الترتيب: النقاط ثم مجموع نقاط الخصوم ثم فارق الأشواط — في تبويب «الترتيب».${unassigned?` <span style="color:var(--red)">لاعبون بلا فريق: ${unassigned}</span>`:''}</span></div>
 
     <div class="card"><h3><span>😴 المتفرّغون (${pool.length})</span>
@@ -3796,7 +3809,7 @@ function teamRankHTML(){
   const showH=st.h2h!=='off', cd=isCards(), swT=isSwissTeam(), bhC=(cd||isTawle())&&swT;
   const one=(o,ttl,qn,note,h2m)=>`<div class="card"><h3><span>${ttl}</span></h3><table>
     <tr><th class="n">#</th><th>${isTawle()?'اللاعب':'الفريق'}</th><th class="n">لعب</th><th class="n">ف/ت/خ</th><th class="n" title="${cd?'فارق الأشواط':isTawle()?'فارق النقاط':'+/−'}">+/−</th>${bhC?'<th class="n" title="بوخهولز: مجموع نقاط الخصوم الذين لاقاهم">خصوم</th>':''}${showH?'<th class="n" title="نقاط المواجهات المباشرة بين المتعادلين بالنقاط">مواجهة</th>':''}<th class="n">نقاط</th></tr>
-    ${o.map((r,i)=>`<tr class="${i<qn?'rank1':''}"><td class="n"><b>${i+1}</b></td><td><b>${esc(r.t.name)}</b>${cd?`<br><span class="mini">${r.t.kids.map(id=>esc(kid(id).name)).join(' و ')}</span>`:''}</td>
+    ${o.map((r,i)=>`<tr class="${i<qn?'rank1':''}"><td class="n"><b>${i+1}</b></td><td><b>${esc(r.t.name)}</b>${(swElimOn()&&swLost(r.t.id))?' <span class="mini" style="color:var(--red)">❌ خرج</span>':''}${cd?`<br><span class="mini">${r.t.kids.map(id=>esc(kid(id).name)).join(' و ')}</span>`:''}</td>
       <td class="n">${r.P}</td><td class="n" style="direction:ltr">${r.L}/${r.D}/${r.W}</td>
       <td class="n" style="direction:ltr">${(r.GF-r.GA>0?'+':'')+(r.GF-r.GA)}</td>${bhC?`<td class="n">${r.BH||0}</td>`:''}
       ${showH?`<td class="n">${(h2m&&h2m[r.t.id])||'—'}</td>`:''}
@@ -4896,6 +4909,8 @@ function renderSet(){
               <button class="btn ghost sm" type="button" id="swrmP" style="width:44px">＋</button></div></div>
           <div class="fld"><label>&nbsp;</label><div class="mini" style="padding-top:6px">٠ = بلا حد زمني (الافتراضي). غير ذلك: لا تُعاد إلا المباريات التي أُنشئت خلال هذه الدقائق. لا تُمسّ أبداً مباراة كُبس «▶ بدأت» عليها أو أُنشئت/عُدّلت يدوياً.</div></div>
         </div>
+        <div class="fld"><label><input type="checkbox" id="s_swel" ${st.swElim===true?'checked':''} style="width:auto;margin-left:6px">❌ الخاسر يخرج — إقصاء مستمر (مع «تزاوج مستمر»)</label></div>
+        <div class="mini" style="margin:-6px 0 10px">من يخسر مباراة يخرج، ومن يفوز يتزاوج فوراً مع أول متفرّغ من الباقين (الأقل انتصارات أولاً) — بلا انتظار الجولة. يتوقّف التزاوج تلقائياً حين يبقى عدد «المتأهلين للأدوار الإقصائية» (مثلاً ٤) فيُنشأ نصف النهائي ومباراة الثالث والنهائي من الختام. «مباريات لكل فريق» لا تنطبق هنا.</div>
         <div class="fld"><label><input type="checkbox" id="s_asw" ${st.allowSwitch?'checked':''} style="width:auto;margin-left:6px">السماح للاعب لعب مع فريق بالانتقال إلى فريق آخر</label></div>
         <div class="mini" style="margin:-6px 0 10px">مُطفأ (الافتراضي): من لعب مع فريق لا ينتقل لغيره. مفعّل: يمكن نقله (من ✎ الفريق أو عند تسجيل ثنائي جديد)، ونتائجه السابقة تبقى مع فريقه القديم. الفريق الذي ينقصه لاعب أو فيه لاعب غائب لا يُزاوَج حتى يكتمل.</div>
         <div class="mini" style="margin:-6px 0 10px">«المواجهة المباشرة»: فريقان متساويان بالنقاط — يتقدّم من ربح مباراتهما. وإن لم يلتقيا وكانا على خط التأهل (مثلاً الرابع والخامس بأفضل ٤) تُنشأ <b>مباراة فاصلة</b> بينهما قبل الأدوار الإقصائية (ولأكثر من فريقين: جدول مواجهاتهم إن التقوا جميعاً، وإلا فاصلة متدرّجة). الترتيب تحت ذلك: مجموع نقاط الخصوم ثم فارق الأشواط.</div>
@@ -5200,7 +5215,7 @@ function renderSet(){
     st.swAuto=$('#s_swa').checked;
     st.swQual=[2,4,8,16].includes(Number($('#s_swq').value))?Number($('#s_swq').value):4;
     st.swTie=$('#s_swtie').value==='buch'?'buch':'h2h';
-    st.allowSwitch=$('#s_asw').checked;
+    st.allowSwitch=$('#s_asw').checked; st.swElim=$('#s_swel').checked;
     st.swRepair=$('#s_swrp').checked;
     st.swRepairMin=Math.max(0,Math.min(60,Number($('#s_swrm').value)||0));
     if(st.sport==='cards'&&st.mode==='individual'){ st.mode='swiss'; alert('النظام الفردي لا يناسب الورق — اعتُمد «سويسري».'); }
